@@ -109,14 +109,15 @@
       const container = document.getElementById('task-list');
       container.innerHTML = '正在讀取最新待辦事項...';
       try {
-        const res = await fetch(GAS_URL, {
-          method: 'POST',
-          body: JSON.stringify({ action: 'get' })
-        });
+        const res = await fetch(GAS_URL + '?action=get', { method: 'GET' });
         const data = await res.json();
-        renderTasks(data.tasks);
+        if (data.error) {
+          container.innerHTML = '後端回傳錯誤：' + data.error;
+        } else {
+          renderTasks(data.tasks || []);
+        }
       } catch (err) {
-        container.innerHTML = '資料讀取失敗，請確認後端設定。';
+        container.innerHTML = '資料讀取失敗，請確認網路或連線網址（' + err.message + '）';
       }
     }
 
@@ -135,12 +136,12 @@
 
       activeTasks.forEach(t => {
         const div = document.createElement('div');
-        const isOverdue = t.dueDate < todayStr;
+        const isOverdue = t.dueDate && t.dueDate < todayStr;
         div.className = `card ${isOverdue ? 'overdue' : 'today'}`;
         div.innerHTML = `
-          <h3 style="margin: 0 0 8px 0;">${t.title} <span class="tag">${t.priority}優先</span></h3>
+          <h3 style="margin: 0 0 8px 0;">${t.title} <span class="tag">${t.priority || '普通'}優先</span></h3>
           <p style="margin: 4px 0; color: #1890ff; font-size: 15px; font-weight: bold;">👤 負責人：${t.assigneeName}</p>
-          <p style="margin: 4px 0; color: #666; font-size: 14px;">📅 截止日：${t.dueDate.split('T')[0]} ${isOverdue ? '<b style="color:red;">(已逾期)</b>' : ''}</p>
+          <p style="margin: 4px 0; color: #666; font-size: 14px;">📅 截止日：${t.dueDate ? t.dueDate.split('T')[0] : '未設定'} ${isOverdue ? '<b style="color:red;">(已逾期)</b>' : ''}</p>
           <p style="margin: 4px 0 12px 0; color: #888; font-size: 12px;">✍️ 指派人：${t.creatorName}</p>
           <button class="btn" onclick="completeTask('${t.id}', this)">標示為已完成</button>
         `;
@@ -173,22 +174,24 @@
         priority: document.getElementById('priority').value
       };
 
-      await fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify(newTask)
-      });
-
-      alert("✅ 工作事項發布成功！");
-      document.getElementById('task-title').value = '';
-      document.getElementById('assignee-name').value = '';
-      submitBtn.disabled = false;
-      submitBtn.innerText = "發布工作事項";
-
-      loadTasks();
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          body: JSON.stringify(newTask)
+        });
+        alert("✅ 工作事項發布成功！");
+        document.getElementById('task-title').value = '';
+        document.getElementById('assignee-name').value = '';
+      } catch (err) {
+        alert("發布失敗，請重試：" + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "發布工作事項";
+        loadTasks();
+      }
     });
 
     initLIFF();
   </script>
 </body>
 </html>
-
