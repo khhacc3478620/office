@@ -109,15 +109,18 @@
       const container = document.getElementById('task-list');
       container.innerHTML = '正在讀取最新待辦事項...';
       try {
-        const res = await fetch(GAS_URL + '?action=get', { method: 'GET' });
+        const res = await fetch(GAS_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'get' })
+        });
         const data = await res.json();
         if (data.error) {
-          container.innerHTML = '後端回傳錯誤：' + data.error;
+          container.innerHTML = '後端錯誤：' + data.error;
         } else {
           renderTasks(data.tasks || []);
         }
       } catch (err) {
-        container.innerHTML = '資料讀取失敗，請確認網路或連線網址（' + err.message + '）';
+        container.innerHTML = '資料讀取失敗：' + err.message;
       }
     }
 
