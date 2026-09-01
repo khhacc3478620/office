@@ -6,25 +6,71 @@
   <title>辦公室待辦事項APP</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f4f6f8; color: #333; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f4f6f8; color: #333; margin: 0; }
     .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .form-card { background: #ffffff; padding: 15px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-top: 4px solid #00c300; }
     .overdue { border-left: 6px solid #ff4d4f; }
     .today { border-left: 6px solid #1890ff; }
-    .btn { background: #00c300; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .btn { background: #00c300; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 8px; }
     .btn:disabled { background: #ccc; }
+    .btn-submit { background: #00c300; font-size: 16px; padding: 10px; }
+    .btn-copy { background: #4a90e2; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; margin-top: 6px; display: inline-block; }
     .tag { font-size: 12px; padding: 2px 6px; border-radius: 4px; background: #eee; margin-left: 6px; }
+    input, select { width: 100%; padding: 10px; margin: 6px 0 12px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+    label { font-weight: bold; font-size: 14px; color: #444; }
   </style>
 </head>
 <body>
-  <h2>📋 辦公室待辦清單</h2>
-  <div id="user-info" style="font-weight: bold; margin-bottom: 15px; color: #555;">載入個人資訊中...</div>
-  <hr style="border: none; border-top: 1px solid #eee; margin-bottom: 15px;">
-  <div id="task-list">讀取資料中...</div>
+  <div style="padding: 10px;">
+    <h2>📋 辦公室待辦清單</h2>
+    <div id="user-info-box" style="background: #eef6ff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; color: #333;">
+      <div id="user-info">載入個人資訊中...</div>
+      <button class="btn-copy" id="copy-id-btn" onclick="copyUserId()" style="display:none;">📋 複製我的 LINE ID</button>
+    </div>
+
+    <!-- ➕ 新增事項表單區 -->
+    <div class="form-card">
+      <h3 style="margin-top: 0; color: #00c300;">➕ 新增/指派工作事項</h3>
+      <form id="add-task-form">
+        <label>工作事項名稱：</label>
+        <input type="text" id="task-title" placeholder="請輸入任務內容（例：聯絡廠商報價）" required>
+
+        <label>指派對象（負責人）：</label>
+        <select id="assignee-name" required>
+          <option value="">-- 請選擇同仁/主任 --</option>
+          <option value="法桂蘭 主任">法桂蘭 主任</option>
+          <option value="簡文章">簡文章</option>
+          <option value="黃鈺茹">黃鈺茹</option>
+          <option value="蔡鳳媛">蔡鳳媛</option>
+          <option value="呂政家">呂政家</option>
+          <option value="邱瓊玉">邱瓊玉</option>
+          <option value="林美君">林美君</option>
+          <option value="蔡勝木">蔡勝木</option>
+        </select>
+
+        <label>截止日期：</label>
+        <input type="date" id="due-date" required>
+
+        <label>優先級：</label>
+        <select id="priority">
+          <option value="普通">普通</option>
+          <option value="高">緊急 (高)</option>
+          <option value="低">不急 (低)</option>
+        </select>
+
+        <button type="submit" class="btn btn-submit" id="submit-btn">發布工作事項</button>
+      </form>
+    </div>
+
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+
+    <h3>📌 目前全辦公室待辦事項</h3>
+    <div id="task-list">讀取資料中...</div>
+  </div>
 
   <script>
-    // 2011358448-vLzZzpKP與https://script.google.com/macros/s/AKfycbzWUyO2md8WI7GvDNEpnzm7ErC637sZW3YN2rgXBtRfeOdOoOGGHnVuShiAC0vIV9i1Gw/exec
     const LIFF_ID = "2011358448-vLzZzpKP";
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbzWUyO2md8WI7GvDNEpnzm7ErC637sZW3YN2rgXBtRfeOdOoOGGHnVuShiAC0vIV9i1Gw/exec"; 
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzWUy02md8WI7GvDNEpnzm7ErC637sZW3YN2rgXBtRfeOdOoGGHnVuShiAC0vIV9i1Gw/exec"; 
 
     let currentUser = {};
 
@@ -36,11 +82,26 @@
         } else {
           const profile = await liff.getProfile();
           currentUser = { id: profile.userId, name: profile.displayName };
-          document.getElementById('user-info').innerText = `👤 使用者：${currentUser.name}`;
+          document.getElementById('user-info').innerText = `👤 操作者：${currentUser.name}`;
+          document.getElementById('copy-id-btn').style.display = 'inline-block';
+          
+          const today = new Date().toISOString().split('T')[0];
+          document.getElementById('due-date').value = today;
+
           loadTasks();
         }
       } catch (err) {
         document.getElementById('user-info').innerText = "LIFF 初始化失敗：" + err.message;
+      }
+    }
+
+    function copyUserId() {
+      if (currentUser.id) {
+        navigator.clipboard.writeText(currentUser.id).then(() => {
+          alert("✅ 已複製您的 LINE ID！請將這串 ID 貼給管理員填入試算表中。");
+        }).catch(() => {
+          prompt("您的 LINE ID 為（請手動複製）：", currentUser.id);
+        });
       }
     }
 
@@ -63,25 +124,25 @@
       const container = document.getElementById('task-list');
       container.innerHTML = '';
       
-      // 篩選出指派給當前使用者且未完成的任務
-      const myTasks = tasks.filter(t => t.assigneeId === currentUser.id && t.status !== 'Completed');
+      const activeTasks = tasks.filter(t => t.status !== 'Completed');
       
-      if (myTasks.length === 0) {
-        container.innerHTML = '<div class="card">🎉 太棒了！您目前沒有未完成的待辦事項。</div>';
+      if (activeTasks.length === 0) {
+        container.innerHTML = '<div class="card">🎉 太棒了！目前沒有未完成的事項。</div>';
         return;
       }
 
       const todayStr = new Date().toISOString().split('T')[0];
 
-      myTasks.forEach(t => {
+      activeTasks.forEach(t => {
         const div = document.createElement('div');
         const isOverdue = t.dueDate < todayStr;
         div.className = `card ${isOverdue ? 'overdue' : 'today'}`;
         div.innerHTML = `
           <h3 style="margin: 0 0 8px 0;">${t.title} <span class="tag">${t.priority}優先</span></h3>
-          <p style="margin: 4px 0; color: #666; font-size: 14px;">📅 截止日：${t.dueDate.split('T')[0]}</p>
-          <p style="margin: 4px 0 12px 0; color: #666; font-size: 14px;">👤 指派人：${t.creatorName}</p>
-          <button class="btn" onclick="completeTask('${t.id}', this)">標示為完成</button>
+          <p style="margin: 4px 0; color: #1890ff; font-size: 15px; font-weight: bold;">👤 負責人：${t.assigneeName}</p>
+          <p style="margin: 4px 0; color: #666; font-size: 14px;">📅 截止日：${t.dueDate.split('T')[0]} ${isOverdue ? '<b style="color:red;">(已逾期)</b>' : ''}</p>
+          <p style="margin: 4px 0 12px 0; color: #888; font-size: 12px;">✍️ 指派人：${t.creatorName}</p>
+          <button class="btn" onclick="completeTask('${t.id}', this)">標示為已完成</button>
         `;
         container.appendChild(div);
       });
@@ -96,6 +157,35 @@
       });
       loadTasks();
     }
+
+    document.getElementById('add-task-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.disabled = true;
+      submitBtn.innerText = "發布中...";
+
+      const newTask = {
+        action: 'add',
+        title: document.getElementById('task-title').value,
+        assigneeName: document.getElementById('assignee-name').value,
+        creatorName: currentUser.name,
+        dueDate: document.getElementById('due-date').value,
+        priority: document.getElementById('priority').value
+      };
+
+      await fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify(newTask)
+      });
+
+      alert("✅ 工作事項發布成功！");
+      document.getElementById('task-title').value = '';
+      document.getElementById('assignee-name').value = '';
+      submitBtn.disabled = false;
+      submitBtn.innerText = "發布工作事項";
+
+      loadTasks();
+    });
 
     initLIFF();
   </script>
