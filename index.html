@@ -70,7 +70,7 @@
 
   <script>
     const LIFF_ID = "2011358448-vLzZzpKP";
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbzWUy02md8WI7GvDNEpnzm7ErC637sZW3YN2rgXBtRfeOdOoGGHnVuShiAC0vIV9i1Gw/exec"; 
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbz3rHLER3WWcfiQsUom1d6YbLM2gViEWY77D7sbdvIYucdvzzZCPkFEZBk5qYN0E70XRw/exec"; 
 
     let currentUser = {};
 
@@ -105,24 +105,30 @@
       }
     }
 
-    async function loadTasks() {
+    function loadTasks() {
       const container = document.getElementById('task-list');
       container.innerHTML = '正在讀取最新待辦事項...';
-      try {
-        const res = await fetch(GAS_URL, {
-          method: 'POST',
-          body: JSON.stringify({ action: 'get' })
-        });
-        const data = await res.json();
-        if (data.error) {
-          container.innerHTML = '後端錯誤：' + data.error;
-        } else {
-          renderTasks(data.tasks || []);
-        }
-      } catch (err) {
-        container.innerHTML = '資料讀取失敗：' + err.message;
-      }
+
+      const oldScript = document.getElementById('jsonp-script');
+      if (oldScript) oldScript.remove();
+
+      const script = document.createElement('script');
+      script.id = 'jsonp-script';
+      script.src = GAS_URL + '?callback=handleData&t=' + new Date().getTime();
+      document.body.appendChild(script);
+      
+      script.onerror = function() {
+        container.innerHTML = '資料讀取失敗，請確認網路與後端設定。';
+      };
     }
+
+    window.handleData = function(data) {
+      if (data && data.tasks) {
+        renderTasks(data.tasks);
+      } else {
+        document.getElementById('task-list').innerHTML = '資料讀取異常。';
+      }
+    };
 
     function renderTasks(tasks) {
       const container = document.getElementById('task-list');
@@ -141,10 +147,16 @@
         const div = document.createElement('div');
         const isOverdue = t.dueDate && t.dueDate < todayStr;
         div.className = `card ${isOverdue ? 'overdue' : 'today'}`;
+        
+        let displayDate = t.dueDate || '未設定';
+        if (displayDate.includes('T')) {
+          displayDate = displayDate.split('T')[0];
+        }
+
         div.innerHTML = `
           <h3 style="margin: 0 0 8px 0;">${t.title} <span class="tag">${t.priority || '普通'}優先</span></h3>
           <p style="margin: 4px 0; color: #1890ff; font-size: 15px; font-weight: bold;">👤 負責人：${t.assigneeName}</p>
-          <p style="margin: 4px 0; color: #666; font-size: 14px;">📅 截止日：${t.dueDate ? t.dueDate.split('T')[0] : '未設定'} ${isOverdue ? '<b style="color:red;">(已逾期)</b>' : ''}</p>
+          <p style="margin: 4px 0; color: #666; font-size: 14px;">📅 截止日：${displayDate} ${isOverdue ? '<b style="color:red;">(已逾期)</b>' : ''}</p>
           <p style="margin: 4px 0 12px 0; color: #888; font-size: 12px;">✍️ 指派人：${t.creatorName}</p>
           <button class="btn" onclick="completeTask('${t.id}', this)">標示為已完成</button>
         `;
@@ -155,11 +167,13 @@
     async function completeTask(taskId, btn) {
       btn.disabled = true;
       btn.innerText = "更新中...";
-      await fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'complete', taskId: taskId })
-      });
-      loadTasks();
+
+      const formData = new FormData();
+      formData.append('action', 'complete');
+      formData.append('taskId', taskId);
+
+      await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: formData });
+      setTimeout(loadTasks, 1500);
     }
 
     document.getElementById('add-task-form').addEventListener('submit', async (e) => {
@@ -168,20 +182,16 @@
       submitBtn.disabled = true;
       submitBtn.innerText = "發布中...";
 
-      const newTask = {
-        action: 'add',
-        title: document.getElementById('task-title').value,
-        assigneeName: document.getElementById('assignee-name').value,
-        creatorName: currentUser.name,
-        dueDate: document.getElementById('due-date').value,
-        priority: document.getElementById('priority').value
-      };
+      const formData = new FormData();
+      formData.append('action', 'add');
+      formData.append('title', document.getElementById('task-title').value);
+      formData.append('assigneeName', document.getElementById('assignee-name').value);
+      formData.append('creatorName', currentUser.name || '同仁');
+      formData.append('dueDate', document.getElementById('due-date').value);
+      formData.append('priority', document.getElementById('priority').value);
 
       try {
-        await fetch(GAS_URL, {
-          method: 'POST',
-          body: JSON.stringify(newTask)
-        });
+        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: formData });
         alert("✅ 工作事項發布成功！");
         document.getElementById('task-title').value = '';
         document.getElementById('assignee-name').value = '';
@@ -190,7 +200,7 @@
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerText = "發布工作事項";
-        loadTasks();
+        setTimeout(loadTasks, 1500);
       }
     });
 
